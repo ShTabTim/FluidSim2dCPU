@@ -7,8 +7,8 @@
 #define CeilSizeX 4
 #define CeilSizeY 4
 
-#define W 256
-#define H 64
+#define W 128
+#define H 128
 
 #define ScrW W*CeilSizeX
 #define ScrH H*CeilSizeY
