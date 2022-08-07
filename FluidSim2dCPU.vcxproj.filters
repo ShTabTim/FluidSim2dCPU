@@ -12,6 +12,5 @@
     <ClInclude Include="FundLibs\sh_rend_cpu\sh_win.h" />
     <ClInclude Include="FundLibs\sh_rend_cpu\sprite.h" />
     <ClInclude Include="FundLibs\math\vec2.h" />
-    <ClInclude Include="FundLibs\math\vec3.h" />
   </ItemGroup>
 </Project>
