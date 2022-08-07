@@ -60,7 +60,7 @@ T inline delta2_y(field<T> f, uint32_t x, uint32_t y) {
 
 template<typename T>
 T inline vnab_b(field<vec2f> f_v, field<T> f_b, uint32_t x, uint32_t y) {
-	return delta_x(f_b, x, y) * f_v(x, y).x + delta_y(f_b, x, y) * f_v(x, y).y ;
+	return delta_x(f_b, x, y) * f_v(x, y).get(0) + delta_y(f_b, x, y) * f_v(x, y).get(1);
 }
 
 template<typename T>
@@ -80,7 +80,7 @@ field<float> new_col_conc;
 field<vec2f> new_velosity;
 
 float div(field<vec2f> v, uint32_t x, uint32_t y) {
-	return delta_x(v, x, y).x + delta_y(v, x, y).y;
+	return delta_x(v, x, y).get(0) + delta_y(v, x, y).get(1);
 }
 vec2f grad(field<float> s, uint32_t x, uint32_t y) {
 	return vec2f(delta_x(s, x, y), delta_y(s, x, y));
@@ -91,14 +91,14 @@ void inline jacobi_pressure(uint32_t x, uint32_t y, float alpha, float beta) {
 #define GET_M_BOX_PRESSURE(x0, y0) ((!box(x0, y0))?(pressure(x0, y0)):( pressure(x, y)))
 #define GET_M_BOX_VELOSITY(x0, y0) ((!box(x0, y0))?(velosity(x0, y0)):(-velosity(x, y)))
 	new_pressure(x, y) = (
-		GET_M_BOX_PRESSURE(x+1, y  ) + 
-		GET_M_BOX_PRESSURE(x-1, y  ) + 
-		GET_M_BOX_PRESSURE(x,   y+1) + 
-		GET_M_BOX_PRESSURE(x,   y-1) + (
-			GET_M_BOX_VELOSITY(x+1, y  ).x -
-			GET_M_BOX_VELOSITY(x-1, y  ).x +
-			GET_M_BOX_VELOSITY(x,   y+1).y -
-			GET_M_BOX_VELOSITY(x,   y-1).y) * 0.5f * alpha) / beta;
+		GET_M_BOX_PRESSURE(x + 1, y) +
+		GET_M_BOX_PRESSURE(x - 1, y) +
+		GET_M_BOX_PRESSURE(x, y + 1) +
+		GET_M_BOX_PRESSURE(x, y - 1) + (
+			GET_M_BOX_VELOSITY(x + 1, y).get(0) -
+			GET_M_BOX_VELOSITY(x - 1, y).get(0) +
+			GET_M_BOX_VELOSITY(x, y + 1).get(1) -
+			GET_M_BOX_VELOSITY(x, y - 1).get(1)) * 0.5f * alpha) / beta;
 #undef GET_M_BOX_PRESSURE
 #undef GET_M_BOX_VELOSITY
 }
@@ -108,24 +108,24 @@ void compute_pressure(uint32_t N) {
 		for (uint32_t i(W); i--;)
 			for (uint32_t j(H); j--;) {
 				if (!box(i, j)) jacobi_pressure(i, j, -Pressure, 4);
-				if(get_key('A').held)pressure(i, j) = new_pressure(i, j);
+				if (get_key('A').held)pressure(i, j) = new_pressure(i, j);
 			}
-		for(uint32_t i(W);i--;)
-			for(uint32_t j(H);j--;)
+		for (uint32_t i(W); i--;)
+			for (uint32_t j(H); j--;)
 				pressure(i, j) = new_pressure(i, j);
 	}
 }
 
 class MainRenderer : public sh_dwaw_win_cpu {
-    bool sh_init() {
-        AppName = L"CPURenderer";
+	bool sh_init() {
+		AppName = L"CPURenderer";
 
 		for (uint32_t i(W); i--;)
 			for (uint32_t j(H); j--;)
 				pressure(i, j) = 1;
 		box.set_zero(255);
-		for(uint32_t i(W);i--;)
-			for(uint32_t j(H);j--;)
+		for (uint32_t i(W); i--;)
+			for (uint32_t j(H); j--;)
 				box(i, j) = 0;
 		for (uint32_t i(W); i--;) {
 			box(i, 0) = 255;
@@ -135,115 +135,116 @@ class MainRenderer : public sh_dwaw_win_cpu {
 			box(0, j) = 255;
 			box(W - 1, j) = 255;
 		}
-        return 1;
-    }
-float sqr(float d) { return d * d; }
-    bool sh_loop(double dt) {
+		return 1;
+	}
+	float sqr(float d) { return d * d; }
+	bool sh_loop(double dt) {
 		key_loop(get_hwnd());
 		static vec2f ptn = vec2f(uint32_t(get_x() / CeilSizeX), uint32_t(get_y() / CeilSizeY)), ptold = ptn;
 		ptn = vec2f(uint32_t(get_x() / CeilSizeX), uint32_t(get_y() / CeilSizeY));
 		static uint8_t block = 255;
 		for (uint8_t i(10); i--;)
 			if (get_key(VK_NUMPAD0 + i).held)
-				block = i*28;
-		if(get_key('V').held && (get_x()>=0 && get_x() < ScrW && get_y()>=0 && get_y()<ScrH)){
-			box(ptn.x, ptn.y) = block;
+				block = i * 28;
+		if (get_key('V').held && (get_x() >= 0 && get_x() < ScrW && get_y() >= 0 && get_y() < ScrH)) {
+			box(ptn.get(0), ptn.get(1)) = block;
 		}
-		if (get_key('N').held && (get_x()>=0 && get_x() < ScrW && get_y()>=0 && get_y()<ScrH))
+		if (get_key('N').held && (get_x() >= 0 && get_x() < ScrW && get_y() >= 0 && get_y() < ScrH))
 			for (uint32_t i(1); i < W - 1; i++)
 				for (uint32_t j(1); j < H - 1; j++) {
-					if (!box(i, j))force(i, j) += (ptn - ptold).get_norm(Force) * exp(- 0.02f*(sqr(ptn.x - i) + sqr(ptn.y - j)));
+					if (!box(i, j))force(i, j) += (ptn - ptold).get_norm(Force) * exp(-0.02f * (sqr(ptn.get(0) - i) + sqr(ptn.get(1) - j)));
 				}
-		if (get_key('B').held && (get_x()>=0 && get_x() < ScrW && get_y()>=0 && get_y()<ScrH))
+		if (get_key('B').held && (get_x() >= 0 && get_x() < ScrW && get_y() >= 0 && get_y() < ScrH))
 			for (uint32_t i(1); i < W - 1; i++)
 				for (uint32_t j(1); j < H - 1; j++) {
-					if (!box(i, j))col_conc(i, j) += 100*pow(0.05f, max(0, -10 + (sqr(ptn.x - i) + sqr(ptn.y - j))));
+					if (!box(i, j))col_conc(i, j) += 100 * pow(0.05f, max(0, -10 + (sqr(ptn.get(0) - i) + sqr(ptn.get(1) - j))));
 				}
-		if (get_key('Q').held && (get_x()>=0 && get_x() < ScrW && get_y()>=0 && get_y()<ScrH))
+		if (get_key('Q').held && (get_x() >= 0 && get_x() < ScrW && get_y() >= 0 && get_y() < ScrH))
 			for (uint32_t i(1); i < W - 1; i++)
 				for (uint32_t j(1); j < H - 1; j++) {
-					if (!box(i, j))pressure(i, j) += 1000*pow(0.05f, max(0, -10 + (sqr(ptn.x - i) + sqr(ptn.y - j))));
+					if (!box(i, j))pressure(i, j) += 1000 * pow(0.05f, max(0, -10 + (sqr(ptn.get(0) - i) + sqr(ptn.get(1) - j))));
 				}
-		if (get_key('W').held && (get_x()>=0 && get_x() < ScrW && get_y()>=0 && get_y()<ScrH))
+		if (get_key('W').held && (get_x() >= 0 && get_x() < ScrW && get_y() >= 0 && get_y() < ScrH))
 			for (uint32_t i(1); i < W - 1; i++)
 				for (uint32_t j(1); j < H - 1; j++) {
-					if (!box(i, j))pressure(i, j) -= 1000*pow(0.05f, max(0, -10 + (sqr(ptn.x - i) + sqr(ptn.y - j))));
+					if (!box(i, j))pressure(i, j) -= 1000 * pow(0.05f, max(0, -10 + (sqr(ptn.get(0) - i) + sqr(ptn.get(1) - j))));
 				}
 		ptold = ptn;
 
 		//dt /= Accuracy;
 		//for (uint32_t k(Accuracy); k--;) {
-			for (uint32_t i(W); i--;)
-				for (uint32_t j(H); j--;) {
-					if (!box(i, j)) {
-						new_velosity(i, j) = velosity(i, j);
-						new_col_conc(i, j) = col_conc(i, j);
-					} else {
-						new_velosity(i, j) = vec2f(0, 0);
-						new_col_conc(i, j) = 0;
-					}
+		for (uint32_t i(W); i--;)
+			for (uint32_t j(H); j--;) {
+				if (!box(i, j)) {
+					new_velosity(i, j) = velosity(i, j);
+					new_col_conc(i, j) = col_conc(i, j);
 				}
-			for (uint32_t i(W); i--;)
-				for (uint32_t j(H); j--;) {
-					if (!box(i, j))new_velosity(i, j) += (-vnab_b(velosity, velosity, i, j) + lapl(velosity, i, j) * Viscosity + force(i, j)) * dt;
+				else {
+					new_velosity(i, j) = vec2f(0, 0);
+					new_col_conc(i, j) = 0;
 				}
-			for (uint32_t i(W); i--;)
-				for (uint32_t j(H); j--;)
-					velosity(i, j) = new_velosity(i, j);
+			}
+		for (uint32_t i(W); i--;)
+			for (uint32_t j(H); j--;) {
+				if (!box(i, j))new_velosity(i, j) += (-vnab_b(velosity, velosity, i, j) + lapl(velosity, i, j) * Viscosity + force(i, j)) * dt;
+			}
+		for (uint32_t i(W); i--;)
+			for (uint32_t j(H); j--;)
+				velosity(i, j) = new_velosity(i, j);
 
-			compute_pressure(30);
+		compute_pressure(30);
 
-			for (uint32_t i(W); i--;)
-				for (uint32_t j(H); j--;) {
-					if (!box(i, j)) {
+		for (uint32_t i(W); i--;)
+			for (uint32_t j(H); j--;) {
+				if (!box(i, j)) {
 #define GET_PRESSURE(x0, y0, x1, y1) ((!box(x0, y0))?pressure(x0, y0):pressure(x1, y1))
-						new_velosity(i, j) -= vec2f(
-							GET_PRESSURE(i+1, j, i, j) - 
-							GET_PRESSURE(i-1, j, i, j), 
-							GET_PRESSURE(i, j+1, i, j) - 
-							GET_PRESSURE(i, j-1, i, j)) * 0.5f / Density;
+					new_velosity(i, j) -= vec2f(
+						GET_PRESSURE(i + 1, j, i, j) -
+						GET_PRESSURE(i - 1, j, i, j),
+						GET_PRESSURE(i, j + 1, i, j) -
+						GET_PRESSURE(i, j - 1, i, j)) * 0.5f / Density;
 #undef GET_PRESSURE
-						new_col_conc(i, j) += (-vnab_b(velosity, col_conc, i, j) + Viscosity_conc * lapl(col_conc, i, j)) * dt;
-						if (force(i, j).abs() > 1) force(i, j) *= 0.9f;
-						else force(i, j) = vec2f(0, 0);
-					}
+					new_col_conc(i, j) += (-vnab_b(velosity, col_conc, i, j) + Viscosity_conc * lapl(col_conc, i, j)) * dt;
+					if (force(i, j).abs() > 1) force(i, j) *= 0.9f;
+					else force(i, j) = vec2f(0, 0);
 				}
-			for (uint32_t i(W); i--;)
-				for (uint32_t j(H); j--;)
-					col_conc(i, j) = max(0, min(240, new_col_conc(i, j)));
-			for (uint32_t i(W); i--;)
-				for (uint32_t j(H); j--;)
-					if (!box(i, j))velosity(i, j) = new_velosity(i, j).get_norm(min(20, new_velosity(i, j).abs()));
+			}
+		for (uint32_t i(W); i--;)
+			for (uint32_t j(H); j--;)
+				col_conc(i, j) = max(0, min(240, new_col_conc(i, j)));
+		for (uint32_t i(W); i--;)
+			for (uint32_t j(H); j--;)
+				if (!box(i, j))velosity(i, j) = new_velosity(i, j).get_norm(min(20, new_velosity(i, j).abs()));
 		//}
 		//dt *= Accuracy;
 		static uint32_t dr = 0;
 		for (uint8_t k(0); k < 10; k++)
 			if (get_key('0' + k).held) dr = k;
-		if(dr == 2 || dr == 3) fill_rect(0, 0, get_dr_w(), get_dr_h(), 100, 0, 0);
+		if (dr == 2 || dr == 3) fill_rect(0, 0, get_dr_w(), get_dr_h(), 100, 0, 0);
 		for (uint32_t i(W); i--;)
 			for (uint32_t j(H); j--;) {
 				switch (dr) {
 				case 0:
-					fill_rect(i*CeilSizeX, j*CeilSizeY, (i + 1)*CeilSizeX, (j + 1)*CeilSizeY, 0xFF & uint32_t(col_conc(i, j)), (0xFF00 & uint32_t(col_conc(i, j))) >> 8, (0xFF0000 & uint32_t(col_conc(i, j))) >> 16);
+					fill_rect(i * CeilSizeX, j * CeilSizeY, (i + 1) * CeilSizeX, (j + 1) * CeilSizeY, 0xFF & uint32_t(col_conc(i, j)), (0xFF00 & uint32_t(col_conc(i, j))) >> 8, (0xFF0000 & uint32_t(col_conc(i, j))) >> 16);
 					break;
 				case 1:
-					fill_rect(i*CeilSizeX, j*CeilSizeY, (i + 1)*CeilSizeX, (j + 1)*CeilSizeY, min(255, uint32_t(10*pressure(i, j))), min(255, uint32_t(10*pressure(i, j)) >> 8), min(255, uint32_t(10*pressure(i, j)) >> 16));
+					fill_rect(i * CeilSizeX, j * CeilSizeY, (i + 1) * CeilSizeX, (j + 1) * CeilSizeY, min(255, uint32_t(10 * pressure(i, j))), min(255, uint32_t(10 * pressure(i, j)) >> 8), min(255, uint32_t(10 * pressure(i, j)) >> 16));
 					break;
 				case 2:
-					draw_line((i+0.5f)*CeilSizeX, (j+0.5f)*CeilSizeY, (i+0.5f)*CeilSizeX + velosity(i, j).x, (j + 0.5f)*CeilSizeY + velosity(i, j).y, 0xFF, 0xFF, 0xFF);
+					draw_line((i + 0.5f) * CeilSizeX, (j + 0.5f) * CeilSizeY, (i + 0.5f) * CeilSizeX + velosity(i, j).get(0), (j + 0.5f) * CeilSizeY + velosity(i, j).get(1), 0xFF, 0xFF, 0xFF);
 					break;
 				case 3:
-					draw_line((i+0.5f)*CeilSizeX, (j+0.5f)*CeilSizeY, (i+0.5f)*CeilSizeX + force(i, j).x, (j + 0.5f)*CeilSizeY + force(i, j).y, 0xFF, 0xFF, 0xFF);
+					draw_line((i + 0.5f) * CeilSizeX, (j + 0.5f) * CeilSizeY, (i + 0.5f) * CeilSizeX + force(i, j).get(0), (j + 0.5f) * CeilSizeY + force(i, j).get(1), 0xFF, 0xFF, 0xFF);
 					break;
 				}
-				if(box(i, j))fill_rect(i*CeilSizeX, j*CeilSizeY, (i + 1)*CeilSizeX, (j + 1)*CeilSizeY, 0xFF&box(i, j), 0xFF&(box(i, j)>>8), 0xFF&(box(i, j)>>16));
+				if (box(i, j))fill_rect(i * CeilSizeX, j * CeilSizeY, (i + 1) * CeilSizeX, (j + 1) * CeilSizeY, 0xFF & box(i, j), 0xFF & (box(i, j) >> 8), 0xFF & (box(i, j) >> 16));
 			}
-		
-        return 1;
-    }
-    bool sh_finit() {
-        return 1;
-    }
+
+		return 1;
+	}
+	bool sh_finit() {
+		return 1;
+	}
 };
 
 int main() {
